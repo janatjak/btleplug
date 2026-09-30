@@ -1,3 +1,21 @@
+# Unreleased
+
+## Breaking changes
+
+- Coded PHY scanning on Windows is now opt-in through the new
+  `ScanFilter::coded_phy` field (default `false`). Code that builds
+  `ScanFilter` with a struct literal needs `..ScanFilter::default()`.
+
+## Bugfixes
+
+- Fix Windows scans missing most advertisements on adapters that report Coded
+  PHY support. Since 0.13.0, `UseCodedPhy` was requested whenever the adapter
+  reported support; on some such adapters the scan then only delivered frequent
+  random-address beacons, while devices advertising on the 1M PHY (named
+  devices, peripherals with a public address advertising every ~2 s) were never
+  reported, even right next to the PC. Scans now use the 1M PHY only, as in
+  0.12, unless `coded_phy` is set.
+
 # 0.13.3 (2026-09-27)
 
 ## Bugfixes

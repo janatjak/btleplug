@@ -26,7 +26,7 @@ pub struct BLEWatcher {
     watcher: BluetoothLEAdvertisementWatcher,
     received_token: Option<i64>,
     /// Whether the adapter reports Coded (long-range) PHY support. Only
-    /// then is `UseCodedPhy` requested: the setter succeeds on any adapter,
+    /// then may `UseCodedPhy` be requested: the setter succeeds on any adapter,
     /// and on one without Coded PHY the scan starts but never reports.
     coded_phy_supported: bool,
 }
@@ -71,7 +71,10 @@ impl BLEWatcher {
         on_received: AdvertisementEventHandler,
     ) -> Result<()> {
         self.remove_received_handler()?;
-        let ScanFilter { services } = filter;
+        let ScanFilter {
+            services,
+            coded_phy,
+        } = filter;
 
         // Clear any OS-level service UUID filter from a previous scan.
         // We intentionally do NOT set service UUIDs on the OS filter: on some
@@ -83,20 +86,22 @@ impl BLEWatcher {
         self.watcher
             .SetScanningMode(BluetoothLEScanningMode::Active)?;
         let _ = self.watcher.SetAllowExtendedAdvertisements(true);
-        // Also receive on the Coded (long-range) PHY, but only when the
-        // adapter supports it. `SetUseCodedPhy(true)` is accepted (and
-        // `Start` succeeds) on adapters without Coded PHY as well, and the
-        // scan then delivers no advertisements at all, so the capability
-        // check is the guard rather than the setter's result.
-        if self.coded_phy_supported {
-            let _ = self.watcher.SetUseCodedPhy(true);
-        }
+        // Receive on the Coded (long-range) PHY only when the caller asks for
+        // it and the adapter supports it. `SetUseCodedPhy(true)` is accepted
+        // (and `Start` succeeds) on adapters without Coded PHY as well, and the
+        // scan then delivers no advertisements at all, so the capability check
+        // is the guard rather than the setter's result. It is opt-in because
+        // some adapters that do report support stop delivering most 1M PHY
+        // advertisements with it enabled. Set it every time: the watcher is
+        // reused across scans.
+        let use_coded_phy = coded_phy && self.coded_phy_supported;
+        let _ = self.watcher.SetUseCodedPhy(use_coded_phy);
         debug!(
             "extended scanning enabled; coded PHY {}",
-            if self.coded_phy_supported {
-                "enabled"
-            } else {
-                "not supported by adapter, disabled"
+            match (coded_phy, self.coded_phy_supported) {
+                (true, true) => "enabled",
+                (true, false) => "requested but not supported by adapter, disabled",
+                (false, _) => "not requested, disabled",
             }
         );
 

@@ -219,6 +219,14 @@ pub struct ScanFilter {
     /// If the filter contains at least one service UUID, only devices supporting at least one of
     /// the given services will be available.
     pub services: Vec<Uuid>,
+    /// Also receive advertisements on the LE Coded (long-range) PHY, where the backend and adapter
+    /// support it. Currently only honored on Windows.
+    ///
+    /// Off by default: on some Windows adapters that report Coded PHY support, scanning with it
+    /// enabled stops delivering most advertisements on the 1M PHY, so ordinary devices are never
+    /// found. Enable it only when you need coded-primary (long range) advertisements.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub coded_phy: bool,
 }
 
 /// Selects peripherals for [`Central::retrieve_peripherals`].
@@ -676,7 +684,15 @@ pub trait Manager {
 
 #[cfg(all(test, feature = "serde"))]
 mod serde_tests {
-    use super::PeripheralProperties;
+    use super::{PeripheralProperties, ScanFilter};
+
+    #[test]
+    fn scan_filter_missing_coded_phy_defaults_to_false() {
+        let filter: ScanFilter =
+            serde_json::from_value(serde_json::json!({ "services": [] })).unwrap();
+        assert_eq!(filter, ScanFilter::default());
+        assert!(!filter.coded_phy);
+    }
 
     #[test]
     fn peripheral_properties_round_trip_appearance() {
