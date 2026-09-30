@@ -25,9 +25,8 @@ pub type AdvertisementEventHandler =
 pub struct BLEWatcher {
     watcher: BluetoothLEAdvertisementWatcher,
     received_token: Option<i64>,
-    /// Whether the adapter reports Coded (long-range) PHY support. Only
-    /// then is `UseCodedPhy` requested: the setter succeeds on any adapter,
-    /// and on one without Coded PHY the scan starts but never reports.
+    /// Whether the adapter reports Coded (long-range) PHY support. Only logged:
+    /// `UseCodedPhy` is not requested, see `start`.
     coded_phy_supported: bool,
 }
 
@@ -83,21 +82,15 @@ impl BLEWatcher {
         self.watcher
             .SetScanningMode(BluetoothLEScanningMode::Active)?;
         let _ = self.watcher.SetAllowExtendedAdvertisements(true);
-        // Also receive on the Coded (long-range) PHY, but only when the
-        // adapter supports it. `SetUseCodedPhy(true)` is accepted (and
-        // `Start` succeeds) on adapters without Coded PHY as well, and the
-        // scan then delivers no advertisements at all, so the capability
-        // check is the guard rather than the setter's result.
-        if self.coded_phy_supported {
-            let _ = self.watcher.SetUseCodedPhy(true);
-        }
+        // Coded (long-range) PHY is not requested. `SetUseCodedPhy(true)` makes
+        // the scan deliver nothing on adapters without Coded PHY (#473), and on
+        // some adapters that do report support it drops most 1M PHY
+        // advertisements: only frequent random-address beacons get through,
+        // while ordinary devices are never reported.
+        let _ = self.watcher.SetUseCodedPhy(false);
         debug!(
-            "extended scanning enabled; coded PHY {}",
-            if self.coded_phy_supported {
-                "enabled"
-            } else {
-                "not supported by adapter, disabled"
-            }
+            "extended scanning enabled; coded PHY disabled (adapter support: {})",
+            self.coded_phy_supported
         );
 
         // Pre-convert the filter UUIDs once so the handler closure is cheap.
